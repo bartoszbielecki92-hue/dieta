@@ -2,7 +2,7 @@
 // - pliki aplikacji: najpierw sieć (żeby widzieć nowe wersje), a bez sieci – kopia z telefonu
 // - zdjęcia: najpierw kopia z telefonu, a jeśli jej nie ma – sieć (i zapis kopii)
 // - dane (data/*): zawsze z sieci; offline aplikacja bierze je z IndexedDB (db.js)
-const WERSJA = 'v9';
+const WERSJA = 'v10';
 const POWLOKA = `powloka-${WERSJA}`;
 const ZDJECIA = 'zdjecia';
 const PLIKI = ['./', 'index.html', 'app.js', 'db.js', 'stan.js', 'ui.js', 'narzedzia.js', 'offline.js',
@@ -49,7 +49,8 @@ self.addEventListener('fetch', (e) => {
   e.respondWith((async () => {
     const cache = await caches.open(POWLOKA);
     try {
-      const r = await zLimitemCzasu(fetch(e.request), 4000);
+      // no-cache: zawsze pytamy serwer, czy plik się zmienił (GitHub każe przeglądarce trzymać pliki 10 min)
+      const r = await zLimitemCzasu(fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }), 4000);
       if (r.ok) cache.put(e.request, r.clone());
       return r;
     } catch {

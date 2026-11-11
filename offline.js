@@ -6,6 +6,29 @@ import { trybChmury, zalogowany, pobierzPlik } from './chmura.js';
 export const zdjecia = { gotowe: 0, razem: 0, trwa: false };
 export const offlineMozliwy = () => 'serviceWorker' in navigator && window.isSecureContext;
 
+// Zdjęcie, którego nie ma jeszcze w telefonie (pobieranie w tle trwa): pobieramy je od razu z chmury i wstawiamy.
+const naprawiane = new Set();
+if (trybChmury()) {
+  document.addEventListener('error', async (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    const a = img.getAttribute('src') || '';
+    if (!a.startsWith('img/') || naprawiane.has(a) || !zalogowany()) return;
+    naprawiane.add(a);
+    try {
+      const r = await pobierzPlik(a);
+      const blob = await r.blob();
+      if ('caches' in window) {
+        const cache = await caches.open('zdjecia');
+        await cache.put(new URL(a, location.href).href, new Response(blob, { headers: { 'Content-Type': r.headers.get('content-type') || 'image/jpeg' } }));
+      }
+      const url = URL.createObjectURL(blob);
+      document.querySelectorAll(`img[src="${CSS.escape(a)}"]`).forEach((x) => { x.src = url; });
+    } catch { /* brak internetu – zostaje szare tło */ }
+    finally { naprawiane.delete(a); }
+  }, true);
+}
+
 export async function zarejestrujSW() {
   if (!offlineMozliwy()) return;
   try {

@@ -1,6 +1,6 @@
 // Aplikacja dietetyczna dla pary – start i nawigacja między ekranami.
 import { $, $$, esc, pamiec } from './narzedzia.js';
-import { wczytajWszystko } from './db.js';
+import { wczytajWszystko, dodajDoKolejki } from './db.js';
 import { S, przygotuj, osoby, ustaw } from './stan.js';
 import { trybChmury, zalogowany } from './chmura.js';
 import { uruchomSynchronizacje, poSynchronizacji } from './synchronizacja.js';
@@ -26,7 +26,22 @@ async function start() {
     console.error(e);
     return;
   }
-  if (nowaOsoba && !S.ustawienia.ja) { await ustaw({ ja: nowaOsoba }); S.osoba = nowaOsoba; }
+  if (nowaOsoba) {
+    if (!S.ustawienia.ja) { await ustaw({ ja: nowaOsoba }); S.osoba = nowaOsoba; }
+    // pierwsze logowanie na tym urządzeniu: wysyłamy zmiany zrobione tu wcześniej (np. w wersji z sieci domowej);
+    // nowsza zmiana i tak wygrywa, więc niczego to nie nadpisze
+    const klucze = [
+      ...[...S.wpisy.values()].filter((w) => w.zrodlo !== 'respo').map((w) => `wpisy:${w.id}`),
+      ...[...S.listy.values()].map((l) => `listy:${l.id}`),
+      ...[...S.przepisy.values()].filter((p) => p.zrodlo === 'wlasne').map((p) => `przepisy:${p.id}`),
+      ...[...S.produkty.values()].filter((p) => p.wlasny).map((p) => `produkty:${p.id}`),
+    ];
+    if (S.ustawienia.cele || S.ustawienia.kolejnoscKategorii || S.ustawienia.kategorieProduktow) {
+      S.ustawienia._wspolneZmieniono ||= '2000-01-01T00:00:00.000Z';      // starsze niż cokolwiek z chmury
+      klucze.push('ustawienia:wspolne');
+    }
+    if (klucze.length) await dodajDoKolejki(klucze);
+  }
   rysujOsoby();
   window.addEventListener('hashchange', (e) => {
     const pozycja = zmianaTrasy(e.oldURL, e.newURL);
